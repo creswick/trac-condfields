@@ -1,0 +1,167 @@
+console.log(condfields);
+console.log(ok_new_fields);
+// Visible globals:
+//  condfields
+//  ok_new_fields
+//  ok_view_fields
+//  mode {'view'|'new'}
+$(function() {
+    /**
+     * Build a new table entry for the given field and specified
+     * column.
+     *
+     * @param {!{label: Element, input: Element}} field
+     *        The field description. label and input are
+     *        jQuery-generated HTML elements.
+     * @param {!number} col The column, either 1 or 2.
+     * @return {!string} The <tr> entry for this field.
+     */
+    var make_field_entry = function (field, col) {
+      var colStr;
+      var prefix = '';
+      var suffix = '';
+
+      if (col == 1) {
+        prefix = '<tr>';
+        colStr = 'col1';
+      } else {
+        colStr = 'col2';
+        suffix = '</tr>';
+      }
+
+      var entry = '<th class="'+colStr+'">' + field.label + '</th>';
+      entry    += '<td class="'+colStr+'">' + field.input + '</td>';
+      console.log(field);
+      console.log(entry);
+      return prefix + entry + suffix;
+    };
+
+    /**
+     * Update the displayed table to reflect the specifiec ticket type.
+     * @param {!string} type The ticket type.
+     */
+    var set_type = function(type) {
+      var col = 1;
+      var table = '';
+      var values = [];
+
+      // build up table entries for each of the fields:
+      for (var i = 0; i < ok_fields.length; i++) {
+        var field_name = ok_fields[i];
+        var field = field_data[field_name];
+        if (null == field) {
+          console.log('null field in ok_fields at index '+i+'; skipping');
+          continue;
+        }
+        if (mode == 'view' && field == 'owner') continue;
+
+        // skip fields that aren't used for this ticket type:
+        if (condfields[type][field] == 0) continue;
+
+        table += make_field_entry(field, col);
+
+        if (col == 1) {
+          col = 2;
+        } else {
+          table += '</tr>';
+          col = 1;
+        }
+
+        // Copy out the value
+        values.push({field: field_name, value: $('#field-' + field_name).val()});
+      }
+
+      // modify the actual table -- start by clearing all but the
+      // first three rows:
+      reset_table();
+      $('#properties tbody').append(table);
+
+      // Restore the previous values
+      for (var j = 0; j < values.length; j++) {
+        $('#field-' + values[j].field).val(values[j].value);
+      }
+    };
+
+    /**
+     * Remove all optional fields from the displayed html table.
+     * (leaving the top three rows)
+     */
+    var reset_table = function () {
+      var n = 0;
+      $('#properties tbody tr').each(
+        function() {
+          if (n > 3) {
+            $(this).remove();
+          }
+          n += 1;
+        });
+    };
+
+    var set_header_type = function (t) {
+      var elms = [[]];
+      $('table.properties tr').each(
+        function() {
+          $(this).children().each(
+            function() {
+              var attr = {TH: 'id', TD: 'headers'}[this.nodeName];
+              if ($(this).attr(attr) != null &&
+                  condfields[t][$(this).attr(attr).substring(2)] == 1) {
+
+                elms[0].push(this);
+                if (elms[0].length == 4) {
+                  var tmp = $('<tr></tr>');
+                  $.each(elms[0], function(i, e) {
+                           tmp.append(e);
+                         });
+                  elms[0] = tmp;
+                  elms.unshift([]);
+                }
+              }
+            });
+        });
+
+      if (elms[0].length == 0) {
+        elms.shift();
+      } else {
+        var tmp = $('<tr></tr>');
+        $.each(elms[0], function(i, e) {
+                 tmp.append(e);
+               });
+        elms[0] = tmp;
+      }
+      elms.reverse();
+      $('table.properties').empty();
+      $.each(elms, function(i, row) {
+               $('table.properties').append(row);
+             });
+    };
+
+    var ok_fields = ok_new_fields;
+
+    if (mode == 'view') {
+      ok_fields = ok_view_fields;
+    }
+
+    var field_data = {};
+    for (var i = 0; i < ok_fields.length; i++) {
+      var field = ok_fields[i];
+      if (mode == 'view' && field == 'owner') continue;
+
+      field_data[field] = {
+        label: $('label[for=\'field-' + field + '\']').parents('th').html(),
+        input: $('#field-' + field).parents('td').html()
+      };
+    }
+
+    if (mode == 'view') {
+      var status_re = /\(\w+ ([^:]+)(: \w+)?\)/;
+      var re_results = status_re.exec($('span.status').text());
+      set_header_type(re_results[1]);
+    }
+
+    set_type($('#field-type').val());
+
+    $('#field-type').change(function() {
+        set_type($(this).val());
+    });
+});
